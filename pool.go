@@ -21,6 +21,7 @@ func NewPool[T any](constructor Constructor[T], destructor Destructor[T], cap in
 
 		available: make(chan *Handle[T], cap),
 		all:       make(map[*Handle[T]]struct{}, cap),
+		destroy:   make(chan struct{}),
 	}
 
 	return p
@@ -34,9 +35,10 @@ type pool[T any] struct {
 
 	cap int
 
-	all  map[*Handle[T]]struct{}
-	done flag
-	l    sync.Mutex
+	all     map[*Handle[T]]struct{}
+	destroy chan struct{}
+	done    flag
+	l       sync.Mutex
 }
 
 func (p *pool[T]) Acquire(ctx context.Context) (*Handle[T], error) {
@@ -53,6 +55,9 @@ func (p *pool[T]) Acquire(ctx context.Context) (*Handle[T], error) {
 				return nil, ErrManagerClosed
 			}
 			return h, nil
+		case <-p.destroy:
+			// one of the managed resources was destroyed, create a new one
+			return p.getOrNew(ctx)
 		}
 	}
 	return p.getOrNew(ctx)
@@ -85,6 +90,11 @@ func (p *pool[T]) Destroy(h *Handle[T]) error {
 		return fmt.Errorf("can not destroy: %w", ErrInvalidHandle)
 	}
 	delete(p.all, h)
+	// If someone is blocking in Acquire, notify them, so a new resource can be created
+	select {
+	case p.destroy <- struct{}{}:
+	default:
+	}
 	return p.destruct(h.Resource)
 }
 
