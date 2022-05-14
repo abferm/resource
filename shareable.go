@@ -6,7 +6,8 @@ import (
 	"sync"
 )
 
-func NewShareable[T any](constructor Constructor[T], destructor Destructor[T], cap int) Manager[T] {
+// NewShareable creates a manager for a single-instance shareable resource
+func NewShareable[T any](constructor Constructor[T], destructor Destructor[T]) Manager[T] {
 	p := &shareable[T]{
 		construct: constructor,
 		destruct:  destructor,
