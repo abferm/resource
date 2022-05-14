@@ -61,6 +61,10 @@ func (p *pool[T]) Acquire(ctx context.Context) (*Handle[T], error) {
 func (p *pool[T]) Release(h *Handle[T]) error {
 	p.l.Lock()
 	defer p.l.Unlock()
+	if p.done.check() {
+		// all resources should already be cleaned up
+		return nil
+	}
 	_, ok := p.all[h]
 	if !ok {
 		return fmt.Errorf("can not release: %w", ErrInvalidHandle)
@@ -72,6 +76,10 @@ func (p *pool[T]) Release(h *Handle[T]) error {
 func (p *pool[T]) Destroy(h *Handle[T]) error {
 	p.l.Lock()
 	defer p.l.Unlock()
+	if p.done.check() {
+		// all resources should already be cleaned up
+		return nil
+	}
 	_, ok := p.all[h]
 	if !ok {
 		return fmt.Errorf("can not destroy: %w", ErrInvalidHandle)
